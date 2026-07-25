@@ -8,3 +8,4 @@ dist/
 *.sqlite
 *.sqlite-journal
 prisma/dev.db*
+.idea
