@@ -1,7 +1,9 @@
 import 'dotenv/config';
 
-type RequiredStringVariable = 'BOT_TOKEN' | 'DATABASE_URL';
-type RequiredNumberVariable = 'SCHEDULER_POLL_MS' | 'CHECK_RETRY_MS';
+type RequiredStringVariable =
+  'BOT_TOKEN' | 'DATABASE_URL' | 'TELEGRAM_API_HASH' | 'TELEGRAM_SESSION';
+type RequiredNumberVariable =
+  'SCHEDULER_POLL_MS' | 'CHECK_RETRY_MS' | 'TELEGRAM_API_ID';
 
 type Environment = Record<RequiredStringVariable, string> &
   Record<RequiredNumberVariable, number>;
@@ -38,9 +40,9 @@ function loadEnvironment(): Environment {
   return {
     BOT_TOKEN: readRequiredString('BOT_TOKEN'),
     DATABASE_URL: readRequiredString('DATABASE_URL'),
-    // TELEGRAM_API_HASH: readRequiredString('TELEGRAM_API_HASH'),
-    // TELEGRAM_SESSION: readRequiredString('TELEGRAM_SESSION'),
-    // TELEGRAM_API_ID: readRequiredPositiveInteger('TELEGRAM_API_ID'),
+    TELEGRAM_API_HASH: readRequiredString('TELEGRAM_API_HASH'),
+    TELEGRAM_SESSION: readRequiredString('TELEGRAM_SESSION'),
+    TELEGRAM_API_ID: readRequiredPositiveInteger('TELEGRAM_API_ID'),
     SCHEDULER_POLL_MS: readRequiredPositiveInteger('SCHEDULER_POLL_MS'),
     CHECK_RETRY_MS: readRequiredPositiveInteger('CHECK_RETRY_MS'),
   };
