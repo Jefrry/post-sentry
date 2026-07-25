@@ -6,3 +6,74 @@ datasource db {
   provider = "sqlite"
   url      = env("DATABASE_URL")
 }
+
+model User {
+  id           String  @id @default(uuid())
+  telegramId   BigInt  @unique
+  isBot        Boolean @default(false)
+  firstName    String?
+  username     String?
+  languageCode String?
+  isPremium    Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  trackings Tracking[]
+}
+
+model Tracking {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  channelId       String
+  channelUsername String?
+  channelTitle    String?
+
+  intervalHours    Int
+  lastSeenMessageId Int
+  lastCheckedAt     DateTime?
+  nextCheckAt       DateTime
+  isActive          Boolean   @default(true)
+  failureCount      Int       @default(0)
+  lastError         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  keywords   Keyword[]
+  deliveries Delivery[]
+
+  @@unique([userId, channelId])
+  @@index([isActive, nextCheckAt])
+}
+
+model Keyword {
+  id         String   @id @default(uuid())
+  trackingId String
+  tracking   Tracking @relation(fields: [trackingId], references: [id], onDelete: Cascade)
+
+  value           String
+  normalizedValue String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([trackingId, normalizedValue])
+}
+
+model Delivery {
+  id         String   @id @default(uuid())
+  trackingId String
+  tracking   Tracking @relation(fields: [trackingId], references: [id], onDelete: Cascade)
+
+  channelMessageId Int
+  deliveredAt      DateTime @default(now())
+  deliveryType     String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([trackingId, channelMessageId])
+}

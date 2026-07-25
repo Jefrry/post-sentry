@@ -1,12 +1,7 @@
 import 'dotenv/config';
 
-type RequiredStringVariable =
-  'BOT_TOKEN' | 'DATABASE_URL'
-    // | 'TELEGRAM_API_HASH' | 'TELEGRAM_SESSION'
-    ;
-type RequiredNumberVariable =
-  // 'TELEGRAM_API_ID'
-    | 'SCHEDULER_POLL_MS' | 'CHECK_RETRY_MS';
+type RequiredStringVariable = 'BOT_TOKEN' | 'DATABASE_URL';
+type RequiredNumberVariable = 'SCHEDULER_POLL_MS' | 'CHECK_RETRY_MS';
 
 type Environment = Record<RequiredStringVariable, string> &
   Record<RequiredNumberVariable, number>;
