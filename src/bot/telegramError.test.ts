@@ -6,23 +6,37 @@ import { TelegramError } from 'telegraf';
 import { isMessageNotModifiedError } from './telegramError.js';
 
 describe('isMessageNotModifiedError', () => {
-  it('recognizes an unchanged message response', () => {
-    const error = new TelegramError({
-      error_code: 400,
-      description:
-        'Bad Request: message is not modified: specified new message content and reply markup are exactly the same',
+  const cases = [
+    {
+      name: 'recognizes an unchanged message response',
+      error: new TelegramError({
+        error_code: 400,
+        description:
+          'Bad Request: message is not modified: specified new message content and reply markup are exactly the same',
+      }),
+      expected: true,
+    },
+    {
+      name: 'does not hide another Telegram 400 error',
+      error: new TelegramError({
+        error_code: 400,
+        description: 'Bad Request: message to edit not found',
+      }),
+      expected: false,
+    },
+    {
+      name: 'does not hide non-Telegram errors',
+      error: new Error('network error'),
+      expected: false,
+    },
+  ] as const;
+
+  for (const testCase of cases) {
+    it(testCase.name, () => {
+      assert.equal(
+        isMessageNotModifiedError(testCase.error),
+        testCase.expected,
+      );
     });
-
-    assert.equal(isMessageNotModifiedError(error), true);
-  });
-
-  it('does not hide other Telegram errors', () => {
-    const error = new TelegramError({
-      error_code: 400,
-      description: 'Bad Request: message to edit not found',
-    });
-
-    assert.equal(isMessageNotModifiedError(error), false);
-    assert.equal(isMessageNotModifiedError(new Error('network error')), false);
-  });
+  }
 });

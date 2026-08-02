@@ -8,7 +8,6 @@ import {
   trackingCancelKeyboard,
   trackingIntervalKeyboard,
 } from '../keyboards/tracking.keyboard.js';
-import { isMessageNotModifiedError } from '../telegramError.js';
 import type { BotHandlerDeps } from './types.js';
 
 export class TrackingHandler {
@@ -131,40 +130,6 @@ export class TrackingHandler {
         );
       }
     });
-
-    this.bot.action('tracking:list', async (ctx) => {
-      await ctx.answerCbQuery();
-
-      const telegramUser = await this.getPrivateUser(ctx);
-
-      if (!telegramUser) {
-        return;
-      }
-
-      try {
-        const user =
-          await this.deps.userService.registerTelegramUser(telegramUser);
-        const trackings = await this.deps.trackingService.listUserTrackings(
-          user.id,
-        );
-
-        await ctx.editMessageText(
-          this.formatTrackingList(trackings),
-          mainKeyboard,
-        );
-      } catch (error) {
-        if (isMessageNotModifiedError(error)) {
-          return;
-        }
-
-        await ctx.reply(
-          this.getErrorMessage(
-            error,
-            'Не удалось получить список отслеживаний.',
-          ),
-        );
-      }
-    });
   }
 
   private async getPrivateUser(
@@ -199,26 +164,6 @@ export class TrackingHandler {
       `Ключевые слова: ${keywords}`,
       `Интервал: ${tracking.intervalHours} ч`,
       `Первая проверка: ${tracking.nextCheckAt.toISOString()}`,
-    ].join('\n');
-  }
-
-  private formatTrackingList(trackings: TrackingDto[]): string {
-    if (trackings.length === 0) {
-      return 'У тебя пока нет отслеживаний.';
-    }
-
-    return [
-      'Твои отслеживания:',
-      ...trackings.map((tracking, index) => {
-        const channel = tracking.channelUsername
-          ? `@${tracking.channelUsername}`
-          : (tracking.channelTitle ?? tracking.channelId);
-        const keywords = tracking.keywords
-          .map((keyword) => keyword.value)
-          .join(', ');
-
-        return `${index + 1}. ${channel} — ${keywords} — ${tracking.intervalHours} ч`;
-      }),
     ].join('\n');
   }
 

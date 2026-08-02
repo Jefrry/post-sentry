@@ -7,6 +7,7 @@ import { UserStateManager } from '../../modules/users/userStateManager.js';
 import { mainKeyboard } from '../keyboards/main.keyboard.js';
 import { StateMessageHandler } from './stateMessage.handler.js';
 import { TrackingHandler } from './tracking.handler.js';
+import { TrackingListHandler } from './trackingList.handler.js';
 import type { BotHandlerDeps } from './types.js';
 
 class MenuHandlerRegistry {
@@ -45,6 +46,7 @@ class MenuHandlerRegistry {
     });
 
     new TrackingHandler(this.bot, this.deps).register();
+    new TrackingListHandler(this.bot, this.deps).register();
     new StateMessageHandler(this.bot, this.deps).register();
   }
 }

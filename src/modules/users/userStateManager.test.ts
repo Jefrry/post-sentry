@@ -10,35 +10,60 @@ import type { ChannelDto } from '../channels/channel.types.js';
 import { UserStateManager } from './userStateManager.js';
 
 describe('UserStateManager', () => {
-  it('keeps only the DTOs required by each tracking creation step', () => {
+  const channel: ChannelDto = {
+    channelId: '1001234567890',
+    channelUsername: 'public_channel',
+    title: 'Public Channel',
+    currentLastMessageId: 42,
+  };
+  const keywords = [{ value: 'TypeScript', normalizedValue: 'typescript' }];
+
+  const stateCases = [
+    {
+      name: 'awaiting channel link keeps no DTOs',
+      arrange: (manager: UserStateManager) =>
+        manager.setAwaitingChannelLink(123),
+      expected: {
+        type: AWAITING_CHANNEL_LINK,
+      },
+    },
+    {
+      name: 'awaiting keywords keeps the normalized channel DTO',
+      arrange: (manager: UserStateManager) =>
+        manager.setAwaitingKeywords(123, channel),
+      expected: {
+        type: AWAITING_KEYWORDS,
+        channel,
+      },
+    },
+    {
+      name: 'awaiting interval keeps channel DTO and parsed keywords',
+      arrange: (manager: UserStateManager) =>
+        manager.setAwaitingInterval(123, channel, keywords),
+      expected: {
+        type: AWAITING_INTERVAL,
+        channel,
+        keywords,
+      },
+    },
+  ] as const;
+
+  for (const testCase of stateCases) {
+    it(testCase.name, () => {
+      const manager = new UserStateManager();
+
+      testCase.arrange(manager);
+
+      assert.deepEqual(manager.get(123), testCase.expected);
+    });
+  }
+
+  it('clears state for a Telegram user id', () => {
     const manager = new UserStateManager();
-    const channel: ChannelDto = {
-      channelId: '1001234567890',
-      channelUsername: 'public_channel',
-      title: 'Public Channel',
-      currentLastMessageId: 42,
-    };
-    const keywords = [{ value: 'TypeScript', normalizedValue: 'typescript' }];
 
     manager.setAwaitingChannelLink(123);
-    assert.deepEqual(manager.get(123), {
-      type: AWAITING_CHANNEL_LINK,
-    });
-
-    manager.setAwaitingKeywords(123, channel);
-    assert.deepEqual(manager.get(123), {
-      type: AWAITING_KEYWORDS,
-      channel,
-    });
-
-    manager.setAwaitingInterval(123, channel, keywords);
-    assert.deepEqual(manager.get(123), {
-      type: AWAITING_INTERVAL,
-      channel,
-      keywords,
-    });
-
     manager.clear(123);
+
     assert.equal(manager.get(123), undefined);
   });
 

@@ -95,6 +95,10 @@ export class TrackingService {
     userId: string,
     trackingId: string,
   ): Promise<boolean> {
+    return this.deleteOwned(trackingId, userId);
+  }
+
+  async deleteOwned(trackingId: string, userId: string): Promise<boolean> {
     const result = await this.trackingRepository.deleteOwned(
       trackingId,
       userId,

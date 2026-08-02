@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
 
 import { prisma } from '../../db/prisma.js';
 import type { ParsedKeyword } from './tracking.types.js';
@@ -16,8 +16,10 @@ export type CreateTrackingData = {
 };
 
 export class TrackingRepository {
+  constructor(private readonly client: PrismaClient = prisma) {}
+
   findByUserAndChannel(userId: string, channelId: string) {
-    return prisma.tracking.findUnique({
+    return this.client.tracking.findUnique({
       where: {
         userId_channelId: {
           userId,
@@ -28,7 +30,7 @@ export class TrackingRepository {
   }
 
   createWithKeywords(data: CreateTrackingData) {
-    return prisma.$transaction((tx) =>
+    return this.client.$transaction((tx) =>
       tx.tracking.create({
         data: {
           userId: data.userId,
@@ -51,7 +53,7 @@ export class TrackingRepository {
   }
 
   listByUser(userId: string) {
-    return prisma.tracking.findMany({
+    return this.client.tracking.findMany({
       where: {
         userId,
       },
@@ -65,7 +67,7 @@ export class TrackingRepository {
   }
 
   findOwned(id: string, userId: string) {
-    return prisma.tracking.findFirst({
+    return this.client.tracking.findFirst({
       where: {
         id,
         userId,
@@ -77,7 +79,7 @@ export class TrackingRepository {
   }
 
   deleteOwned(id: string, userId: string) {
-    return prisma.tracking.deleteMany({
+    return this.client.tracking.deleteMany({
       where: {
         id,
         userId,
@@ -86,7 +88,7 @@ export class TrackingRepository {
   }
 
   findDue(now: Date) {
-    return prisma.tracking.findMany({
+    return this.client.tracking.findMany({
       where: {
         isActive: true,
         nextCheckAt: {
@@ -116,7 +118,7 @@ export class TrackingRepository {
       nextCheckAt: Date;
     },
   ) {
-    return prisma.tracking.update({
+    return this.client.tracking.update({
       where: {
         id,
       },
@@ -138,7 +140,7 @@ export class TrackingRepository {
       errorMessage: string;
     },
   ) {
-    return prisma.tracking.update({
+    return this.client.tracking.update({
       where: {
         id,
       },
