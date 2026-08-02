@@ -2,9 +2,9 @@ import 'dotenv/config';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 
+import qrcode from 'qrcode-terminal';
 import { sessions, TelegramClient } from 'telegram';
 
-// TODO: Waiting for creating tg app
 const { StringSession } = sessions;
 
 function readRequiredString(name: 'TELEGRAM_API_HASH'): string {
@@ -45,18 +45,40 @@ async function main(): Promise<void> {
   const rl = readline.createInterface({ input, output });
 
   try {
-    await client.start({
-      phoneNumber: async () => rl.question('Telegram phone number: '),
-      phoneCode: async () => rl.question('Telegram login code: '),
-      password: async (hint?: string) =>
-        rl.question(`Telegram 2FA password${hint ? ` (${hint})` : ''}: `),
-      onError: (error: Error) => {
-        console.error(`Telegram authorization error: ${error.message}`);
+    await client.connect();
+
+    console.log(
+      'Open Telegram on your phone: Settings -> Devices -> Link Desktop Device.',
+    );
+    console.log('Scan the QR code below and confirm the login.');
+    console.log('');
+
+    await client.signInUserWithQrCode(
+      {
+        apiId,
+        apiHash,
       },
-    });
+      {
+        qrCode: async (code) => {
+          const loginUrl = `tg://login?token=${code.token.toString('base64url')}`;
+
+          console.log(
+            `QR login link expires at ${new Date(code.expires * 1000).toISOString()}`,
+          );
+          qrcode.generate(loginUrl, { small: true });
+          console.log(loginUrl);
+          console.log('');
+        },
+        password: async (hint?: string) =>
+          rl.question(`Telegram 2FA password${hint ? ` (${hint})` : ''}: `),
+        onError: (error: Error) => {
+          console.error(`Telegram QR authorization error: ${error.message}`);
+        },
+      },
+    );
 
     console.log('');
-    console.log('Telegram authorization succeeded.');
+    console.log('Telegram QR authorization succeeded.');
     console.log(
       'Save this StringSession into TELEGRAM_SESSION and never share it with anyone:',
     );
@@ -69,6 +91,6 @@ async function main(): Promise<void> {
 
 main().catch((error: unknown) => {
   const message = error instanceof Error ? error.message : 'Unknown error';
-  console.error(`Failed to create Telegram session: ${message}`);
+  console.error(`Failed to create Telegram QR session: ${message}`);
   process.exitCode = 1;
 });
