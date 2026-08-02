@@ -1,5 +1,6 @@
-import { bot } from './bot/bot.js';
+import { createBot } from './bot/bot.js';
 import { prisma } from './db/prisma.js';
+import { ChannelReaderService } from './modules/channels/channelReader.service.js';
 import {
   TelegramClientService,
   TelegramStartupError,
@@ -8,6 +9,10 @@ import { logger } from './utils/logger.js';
 
 let isShuttingDown = false;
 const telegramClientService = new TelegramClientService();
+const channelReaderService = new ChannelReaderService(
+  telegramClientService.getClient(),
+);
+const bot = createBot(channelReaderService);
 
 async function startBot(): Promise<void> {
   await telegramClientService.connect();

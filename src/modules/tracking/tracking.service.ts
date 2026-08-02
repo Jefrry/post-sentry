@@ -1,9 +1,11 @@
 import { DomainError } from '../common/domainError.js';
 import { parseKeywords } from '../../utils/keywordMatcher.js';
+import { TrackingAlreadyExistsError } from './tracking.errors.js';
 import { TrackingRepository } from './tracking.repository.js';
 import {
   allowedIntervalHours,
   type DueTrackingDto,
+  type ParsedKeyword,
   type TrackingDto,
   type TrackingIntervalHours,
 } from './tracking.types.js';
@@ -17,23 +19,25 @@ export type CreateTrackingInput = {
   channelTitle?: string | null;
   intervalHours: number;
   lastSeenMessageId: number;
-  keywordsInput: string;
+  keywords: ParsedKeyword[];
   now?: Date;
 };
 
 export class TrackingService {
   constructor(private readonly trackingRepository = new TrackingRepository()) {}
 
-  async createTracking(input: CreateTrackingInput): Promise<TrackingDto> {
+  async create(input: CreateTrackingInput): Promise<TrackingDto> {
     const intervalHours = this.parseIntervalHours(input.intervalHours);
-    const keywords = parseKeywords(input.keywordsInput);
+    const keywords = parseKeywords(
+      input.keywords.map((keyword) => keyword.value).join(','),
+    );
     const existingTracking = await this.trackingRepository.findByUserAndChannel(
       input.userId,
       input.channelId,
     );
 
     if (existingTracking) {
-      throw new DomainError('Этот канал уже отслеживается.');
+      throw new TrackingAlreadyExistsError();
     }
 
     const now = input.now ?? new Date();
@@ -46,6 +50,7 @@ export class TrackingService {
         channelTitle: input.channelTitle ?? null,
         intervalHours,
         lastSeenMessageId: input.lastSeenMessageId,
+        lastCheckedAt: now,
         nextCheckAt: this.addHours(now, intervalHours),
         keywords,
       });
@@ -53,11 +58,15 @@ export class TrackingService {
       return this.toTrackingDto(tracking);
     } catch (error) {
       if (this.trackingRepository.isKnownPrismaUniqueError(error)) {
-        throw new DomainError('Этот канал уже отслеживается.');
+        throw new TrackingAlreadyExistsError();
       }
 
       throw error;
     }
+  }
+
+  async createTracking(input: CreateTrackingInput): Promise<TrackingDto> {
+    return this.create(input);
   }
 
   async listUserTrackings(userId: string): Promise<TrackingDto[]> {

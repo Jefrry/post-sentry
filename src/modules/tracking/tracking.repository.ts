@@ -10,6 +10,7 @@ export type CreateTrackingData = {
   channelTitle?: string | null;
   intervalHours: number;
   lastSeenMessageId: number;
+  lastCheckedAt: Date;
   nextCheckAt: Date;
   keywords: ParsedKeyword[];
 };
@@ -36,6 +37,7 @@ export class TrackingRepository {
           channelTitle: data.channelTitle ?? null,
           intervalHours: data.intervalHours,
           lastSeenMessageId: data.lastSeenMessageId,
+          lastCheckedAt: data.lastCheckedAt,
           nextCheckAt: data.nextCheckAt,
           keywords: {
             create: data.keywords,
