@@ -27,7 +27,7 @@ RUN pnpm exec tsc
 
 FROM build AS production-dependencies
 
-RUN pnpm prune --prod
+RUN pnpm exec prisma -v
 
 FROM node:${NODE_MAJOR}-bookworm-slim AS production
 
