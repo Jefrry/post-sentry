@@ -87,6 +87,7 @@ describe('ChannelReaderService.getMessagesAfter', () => {
     const result = await service.getMessagesAfter('public_channel', 10);
 
     assert.deepEqual(client.lastGetMessagesParams, {
+      limit: undefined,
       minId: 10,
       reverse: true,
     });

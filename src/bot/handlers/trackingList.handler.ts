@@ -27,7 +27,7 @@ export class TrackingListHandler {
       await this.showCurrentUserList(ctx, 0);
     });
 
-    this.bot.action(/^tl:p:(.*)$/, async (ctx) => {
+    this.bot.action(/^tl:p:([^:]+)$/, async (ctx) => {
       await ctx.answerCbQuery();
       const page = this.parsePage(ctx.match[1]);
 
@@ -38,7 +38,7 @@ export class TrackingListHandler {
       );
     });
 
-    this.bot.action(/^tl:q:(.*):(.*)$/, async (ctx) => {
+    this.bot.action(/^tl:q:([^:]+):([^:]+)$/, async (ctx) => {
       await ctx.answerCbQuery();
       const trackingId = ctx.match[1] ?? '';
       const page = this.parsePage(ctx.match[2]);
@@ -89,7 +89,7 @@ export class TrackingListHandler {
       }
     });
 
-    this.bot.action(/^tl:x:(.*):(.*)$/, async (ctx) => {
+    this.bot.action(/^tl:x:([^:]+):([^:]+)$/, async (ctx) => {
       await ctx.answerCbQuery();
       const trackingId = ctx.match[1] ?? '';
       const page = this.parsePage(ctx.match[2]);
@@ -132,7 +132,7 @@ export class TrackingListHandler {
       }
     });
 
-    this.bot.action(/^tl:c:(.*)$/, async (ctx) => {
+    this.bot.action(/^tl:c:([^:]+)$/, async (ctx) => {
       await ctx.answerCbQuery();
       const page = this.parsePage(ctx.match[1]);
 
@@ -175,11 +175,16 @@ export class TrackingListHandler {
     const trackings = await this.deps.trackingService.listUserTrackings(userId);
     const totalPages = Math.max(1, Math.ceil(trackings.length / pageSize));
     const page = Math.min(requestedPage, totalPages - 1);
+    const effectiveNotice =
+      notice ??
+      (requestedPage !== page
+        ? 'Эта страница уже недоступна. Показана последняя актуальная страница.'
+        : undefined);
     const pageItems = trackings.slice(
       page * pageSize,
       page * pageSize + pageSize,
     );
-    const text = this.formatList(pageItems, page, totalPages, notice);
+    const text = this.formatList(pageItems, page, totalPages, effectiveNotice);
     const keyboard =
       trackings.length === 0
         ? emptyTrackingListKeyboard()

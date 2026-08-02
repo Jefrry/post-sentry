@@ -1,17 +1,18 @@
 import { Telegraf } from 'telegraf';
 
 import { env } from '../config/env.js';
-import type { ChannelReaderService } from '../modules/channels/channelReader.service.js';
-import type { TrackingService } from '../modules/tracking/tracking.service.js';
+import { logger } from '../utils/logger.js';
 import { registerMenuHandlers } from './handlers/menu.handler.js';
+import type { BotHandlerDeps } from './handlers/types.js';
 
-export function createBot(
-  channelReaderService: ChannelReaderService,
-  trackingService: TrackingService,
-): Telegraf {
+export function createBot(deps: BotHandlerDeps): Telegraf {
   const bot = new Telegraf(env.BOT_TOKEN);
 
-  registerMenuHandlers(bot, channelReaderService, trackingService);
+  registerMenuHandlers(bot, deps);
+  bot.catch((error) => {
+    const errorName = error instanceof Error ? error.name : 'unknown';
+    logger.error(`Unhandled Telegram update error: ${errorName}`);
+  });
 
   return bot;
 }

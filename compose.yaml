@@ -1,0 +1,35 @@
+name: post-sentry
+
+services:
+  app:
+    image: post-sentry:local
+    build:
+      context: .
+      target: production
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: file:/app/data/app.db
+      NODE_ENV: production
+      NODE_OPTIONS: --max-old-space-size=320
+    volumes:
+      - sqlite-data:/app/data
+    user: '1000:1000'
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    cpus: '0.50'
+    mem_limit: 512m
+    mem_reservation: 128m
+    pids_limit: 128
+
+volumes:
+  sqlite-data:
+    name: post-sentry-data

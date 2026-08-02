@@ -1,6 +1,6 @@
 import { createBot } from './bot/bot.js';
 import { env } from './config/env.js';
-import { prisma } from './db/prisma.js';
+import { disconnectDatabase } from './db/prisma.js';
 import { ChannelReaderService } from './modules/channels/channelReader.service.js';
 import { DeliveryRepository } from './modules/monitoring/delivery.repository.js';
 import { MonitoringService } from './modules/monitoring/monitoring.service.js';
@@ -11,6 +11,8 @@ import {
   TelegramStartupError,
 } from './modules/telegram/telegramClient.service.js';
 import { TrackingService } from './modules/tracking/tracking.service.js';
+import { UserService } from './modules/users/user.service.js';
+import { UserStateManager } from './modules/users/userStateManager.js';
 import { logger } from './utils/logger.js';
 
 const telegramClientService = new TelegramClientService();
@@ -19,7 +21,12 @@ const channelReaderService = new ChannelReaderService(
 );
 const trackingService = new TrackingService();
 const deliveryRepository = new DeliveryRepository();
-const bot = createBot(channelReaderService, trackingService);
+const bot = createBot({
+  userService: new UserService(),
+  trackingService,
+  channelReaderService,
+  userStateManager: new UserStateManager(),
+});
 const notificationService = new NotificationService(bot.telegram);
 const monitoringService = new MonitoringService(
   trackingService,
@@ -73,16 +80,17 @@ async function performShutdown(reason: string): Promise<void> {
   await runShutdownStep('scheduler', () => schedulerService.stop());
 
   if (botStarted) {
-    await runShutdownStep('bot', () => {
+    await runShutdownStep('bot', async () => {
       bot.stop(reason);
       botStarted = false;
+      await botRunPromise;
     });
   }
 
   await runShutdownStep('GramJS client', () =>
     telegramClientService.disconnect(),
   );
-  await runShutdownStep('Prisma client', () => prisma.$disconnect());
+  await runShutdownStep('Prisma client', () => disconnectDatabase());
 }
 
 async function runShutdownStep(

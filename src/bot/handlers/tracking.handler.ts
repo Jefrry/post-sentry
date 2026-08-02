@@ -1,6 +1,7 @@
 import { Telegraf, type Context } from 'telegraf';
 
 import { AWAITING_INTERVAL } from '../../constants.js';
+import { DomainError } from '../../modules/common/domainError.js';
 import { TrackingAlreadyExistsError } from '../../modules/tracking/tracking.errors.js';
 import type { TrackingDto } from '../../modules/tracking/tracking.types.js';
 import { mainKeyboard } from '../keyboards/main.keyboard.js';
@@ -47,17 +48,24 @@ export class TrackingHandler {
     this.bot.action('tracking:cancel', async (ctx) => {
       await ctx.answerCbQuery();
 
-      if (ctx.from) {
-        this.deps.userStateManager.clear(ctx.from.id);
+      const telegramUser = await this.getPrivateUser(ctx);
+
+      if (!telegramUser) {
+        return;
       }
 
-      await ctx.editMessageText(
-        'Добавление отслеживания отменено.',
-        mainKeyboard,
-      );
+      this.deps.userStateManager.clear(telegramUser.id);
+
+      const text = 'Добавление отслеживания отменено.';
+
+      try {
+        await ctx.editMessageText(text, mainKeyboard);
+      } catch {
+        await ctx.reply(text, mainKeyboard);
+      }
     });
 
-    this.bot.action(/^tracking:interval:(.*)$/, async (ctx) => {
+    this.bot.action(/^tracking:interval:([^:]+)$/, async (ctx) => {
       await ctx.answerCbQuery();
 
       const telegramUser = await this.getPrivateUser(ctx);
@@ -96,10 +104,12 @@ export class TrackingHandler {
         return;
       }
 
+      let tracking: TrackingDto;
+
       try {
         const user =
           await this.deps.userService.registerTelegramUser(telegramUser);
-        const tracking = await this.deps.trackingService.create({
+        tracking = await this.deps.trackingService.create({
           userId: user.id,
           channelId: state.channel.channelId,
           channelUsername: state.channel.channelUsername,
@@ -108,12 +118,6 @@ export class TrackingHandler {
           lastSeenMessageId: state.channel.currentLastMessageId,
           keywords: state.keywords,
         });
-
-        this.deps.userStateManager.clear(telegramUser.id);
-        await ctx.editMessageText(
-          this.formatCreatedTracking(tracking),
-          mainKeyboard,
-        );
       } catch (error) {
         if (error instanceof TrackingAlreadyExistsError) {
           this.deps.userStateManager.clear(telegramUser.id);
@@ -128,6 +132,16 @@ export class TrackingHandler {
           ),
           trackingIntervalKeyboard,
         );
+        return;
+      }
+
+      this.deps.userStateManager.clear(telegramUser.id);
+      const text = this.formatCreatedTracking(tracking);
+
+      try {
+        await ctx.editMessageText(text, mainKeyboard);
+      } catch {
+        await ctx.reply(text, mainKeyboard);
       }
     });
   }
@@ -168,7 +182,7 @@ export class TrackingHandler {
   }
 
   private getErrorMessage(error: unknown, fallbackText: string): string {
-    if (error instanceof Error) {
+    if (error instanceof DomainError) {
       return error.message;
     }
 

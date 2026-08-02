@@ -65,6 +65,7 @@ export class ChannelReaderService {
 
     try {
       const messages = await this.client.getMessages(`@${normalizedUsername}`, {
+        limit: undefined,
         minId: lastSeenMessageId,
         reverse: true,
       });

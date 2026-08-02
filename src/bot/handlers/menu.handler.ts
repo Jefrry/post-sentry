@@ -1,9 +1,5 @@
 import { Telegraf } from 'telegraf';
 
-import type { ChannelReaderService } from '../../modules/channels/channelReader.service.js';
-import { TrackingService } from '../../modules/tracking/tracking.service.js';
-import { UserService } from '../../modules/users/user.service.js';
-import { UserStateManager } from '../../modules/users/userStateManager.js';
 import { mainKeyboard } from '../keyboards/main.keyboard.js';
 import { StateMessageHandler } from './stateMessage.handler.js';
 import { TrackingHandler } from './tracking.handler.js';
@@ -11,20 +7,10 @@ import { TrackingListHandler } from './trackingList.handler.js';
 import type { BotHandlerDeps } from './types.js';
 
 class MenuHandlerRegistry {
-  private readonly deps: BotHandlerDeps;
-
   constructor(
     private readonly bot: Telegraf,
-    channelReaderService: ChannelReaderService,
-    trackingService: TrackingService,
-  ) {
-    this.deps = {
-      userService: new UserService(),
-      trackingService,
-      channelReaderService,
-      userStateManager: new UserStateManager(),
-    };
-  }
+    private readonly deps: BotHandlerDeps,
+  ) {}
 
   register(): void {
     this.bot.start(async (ctx) => {
@@ -49,17 +35,23 @@ class MenuHandlerRegistry {
     new TrackingHandler(this.bot, this.deps).register();
     new TrackingListHandler(this.bot, this.deps).register();
     new StateMessageHandler(this.bot, this.deps).register();
+
+    this.bot.on('callback_query', async (ctx) => {
+      await ctx.answerCbQuery('Эта кнопка устарела.');
+
+      if (ctx.chat?.type === 'private') {
+        await ctx.reply(
+          'Открой актуальное меню командой /start.',
+          mainKeyboard,
+        );
+      }
+    });
   }
 }
 
 export function registerMenuHandlers(
   bot: Telegraf,
-  channelReaderService: ChannelReaderService,
-  trackingService: TrackingService,
+  deps: BotHandlerDeps,
 ): void {
-  new MenuHandlerRegistry(
-    bot,
-    channelReaderService,
-    trackingService,
-  ).register();
+  new MenuHandlerRegistry(bot, deps).register();
 }

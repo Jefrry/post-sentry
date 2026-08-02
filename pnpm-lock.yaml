@@ -14,6 +14,9 @@ importers:
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
+      prisma:
+        specifier: 6.19.2
+        version: 6.19.2(typescript@6.0.3)
       telegraf:
         specifier: ^4.16.3
         version: 4.16.3
@@ -42,9 +45,6 @@ importers:
       prettier:
         specifier: ^3.8.4
         version: 3.9.6
-      prisma:
-        specifier: 6.19.2
-        version: 6.19.2(typescript@6.0.3)
       qrcode-terminal:
         specifier: ^0.12.0
         version: 0.12.0
