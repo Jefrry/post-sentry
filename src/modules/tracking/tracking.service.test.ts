@@ -82,7 +82,10 @@ describe('TrackingService.create', () => {
       } as unknown as TrackingRepository;
       const service = new TrackingService(repository);
 
-      const result = await service.create(testCase.input);
+      const result = await service.create({
+        ...testCase.input,
+        keywords: [...testCase.input.keywords],
+      });
 
       assert.deepEqual(createdData, {
         userId: testCase.input.userId,
@@ -164,7 +167,7 @@ describe('TrackingService ownership', () => {
       if (testCase.expectedErrorMessage) {
         await assert.rejects(
           () => service.getOwnedTracking('current-user', 'tracking-1'),
-          (error) =>
+          (error: unknown) =>
             error instanceof DomainError &&
             error.message === testCase.expectedErrorMessage,
         );
@@ -215,6 +218,64 @@ describe('TrackingService ownership', () => {
       }
 
       assert.deepEqual(results, testCase.expectedResults);
+    });
+  }
+});
+
+describe('TrackingService check scheduling', () => {
+  const checkedAt = new Date('2026-08-02T12:00:00.000Z');
+  const cases = [
+    {
+      name: 'schedules the next regular check after a successful check',
+      operation: 'success',
+      intervalHours: 3,
+      expectedData: {
+        lastSeenMessageId: 99,
+        lastCheckedAt: checkedAt,
+        nextCheckAt: new Date('2026-08-02T15:00:00.000Z'),
+      },
+    },
+    {
+      name: 'schedules retry and persists diagnostic after a failed check',
+      operation: 'failure',
+      expectedData: {
+        lastCheckedAt: checkedAt,
+        nextCheckAt: new Date('2026-08-02T12:15:00.000Z'),
+        errorMessage: 'bot was blocked by the user',
+      },
+    },
+  ] as const;
+
+  for (const testCase of cases) {
+    it(testCase.name, async () => {
+      let persistedData: unknown;
+      const repository = {
+        markSuccessfulCheck: async (_trackingId: string, data: unknown) => {
+          persistedData = data;
+        },
+        markFailedCheck: async (_trackingId: string, data: unknown) => {
+          persistedData = data;
+        },
+      } as unknown as TrackingRepository;
+      const service = new TrackingService(repository);
+
+      if (testCase.operation === 'success') {
+        await service.markSuccessfulCheck({
+          trackingId: 'tracking-1',
+          lastSeenMessageId: 99,
+          intervalHours: testCase.intervalHours,
+          checkedAt,
+        });
+      } else {
+        await service.markFailedCheck({
+          trackingId: 'tracking-1',
+          error: new Error('bot was blocked by the user'),
+          retryMs: 15 * 60 * 1000,
+          checkedAt,
+        });
+      }
+
+      assert.deepEqual(persistedData, testCase.expectedData);
     });
   }
 });

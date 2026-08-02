@@ -36,7 +36,7 @@ describe('ChannelReaderService.resolvePublicChannel', () => {
     const client = new FakeGramJsClient({
       entity: new Api.User({
         id: createLongId('123'),
-        isSelf: false,
+        self: false,
         contact: false,
         mutualContact: false,
         deleted: false,
@@ -67,7 +67,7 @@ describe('ChannelReaderService.resolvePublicChannel', () => {
 });
 
 describe('ChannelReaderService.getMessagesAfter', () => {
-  it('requests messages after cursor and maps non-empty posts from old to new', async () => {
+  it('maps every observed id so monitoring can advance its cursor', async () => {
     const messages = [
       createMessage({ id: 11, date: 1_700_000_000, message: ' first post ' }),
       createMessage({ id: 12, date: 1_700_000_060, message: '' }),
@@ -105,6 +105,20 @@ describe('ChannelReaderService.getMessagesAfter', () => {
           text: 'first post',
           postUrl: 'https://t.me/public_channel/11',
           isService: false,
+        },
+        {
+          messageId: 12,
+          date: '2023-11-14T22:14:20.000Z',
+          text: '',
+          postUrl: 'https://t.me/public_channel/12',
+          isService: false,
+        },
+        {
+          messageId: 13,
+          date: '2023-11-14T22:15:20.000Z',
+          text: '',
+          postUrl: 'https://t.me/public_channel/13',
+          isService: true,
         },
         {
           messageId: 14,

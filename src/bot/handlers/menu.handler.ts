@@ -16,10 +16,11 @@ class MenuHandlerRegistry {
   constructor(
     private readonly bot: Telegraf,
     channelReaderService: ChannelReaderService,
+    trackingService: TrackingService,
   ) {
     this.deps = {
       userService: new UserService(),
-      trackingService: new TrackingService(),
+      trackingService,
       channelReaderService,
       userStateManager: new UserStateManager(),
     };
@@ -54,6 +55,11 @@ class MenuHandlerRegistry {
 export function registerMenuHandlers(
   bot: Telegraf,
   channelReaderService: ChannelReaderService,
+  trackingService: TrackingService,
 ): void {
-  new MenuHandlerRegistry(bot, channelReaderService).register();
+  new MenuHandlerRegistry(
+    bot,
+    channelReaderService,
+    trackingService,
+  ).register();
 }

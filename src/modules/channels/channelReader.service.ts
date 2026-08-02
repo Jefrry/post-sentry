@@ -69,9 +69,9 @@ export class ChannelReaderService {
         reverse: true,
       });
 
-      return messages
-        .map((message) => this.toChannelPostDto(normalizedUsername, message))
-        .filter((message): message is ChannelPostDto => message !== null);
+      return messages.map((message) =>
+        this.toChannelPostDto(normalizedUsername, message),
+      );
     } catch (error) {
       throw this.toDomainError(error);
     }
@@ -105,23 +105,16 @@ export class ChannelReaderService {
   toChannelPostDto(
     channelUsername: string,
     message: GramJsMessage,
-  ): ChannelPostDto | null {
-    if (message instanceof Api.MessageService) {
-      return null;
-    }
-
-    const text = message.message?.trim() ?? '';
-
-    if (!text) {
-      return null;
-    }
-
+  ): ChannelPostDto {
     return {
       messageId: message.id,
       date: new Date(message.date * 1000),
-      text,
+      text:
+        message instanceof Api.MessageService
+          ? ''
+          : (message.message?.trim() ?? ''),
       postUrl: `https://t.me/${channelUsername}/${message.id}`,
-      isService: false,
+      isService: message instanceof Api.MessageService,
     };
   }
 

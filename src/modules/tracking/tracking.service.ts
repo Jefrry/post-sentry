@@ -51,7 +51,7 @@ export class TrackingService {
         intervalHours,
         lastSeenMessageId: input.lastSeenMessageId,
         lastCheckedAt: now,
-        nextCheckAt: this.addHours(now, intervalHours),
+        nextCheckAt: new Date(now.getTime() + intervalHours * 60 * 60 * 1000),
         keywords,
       });
 
@@ -119,45 +119,55 @@ export class TrackingService {
   markSuccessfulCheck({
     trackingId,
     lastSeenMessageId,
+    intervalHours,
     checkedAt = new Date(),
   }: {
     trackingId: string;
     lastSeenMessageId: number;
+    intervalHours: number;
     checkedAt?: Date;
   }) {
+    const parsedIntervalHours = this.parseIntervalHours(intervalHours);
+
     return this.trackingRepository.markSuccessfulCheck(trackingId, {
       lastSeenMessageId,
       lastCheckedAt: checkedAt,
-      nextCheckAt: checkedAt,
+      nextCheckAt: new Date(
+        checkedAt.getTime() + parsedIntervalHours * 60 * 60 * 1000,
+      ),
     });
   }
 
   markFailedCheck({
     trackingId,
     error,
+    retryMs,
     checkedAt = new Date(),
   }: {
     trackingId: string;
     error: unknown;
+    retryMs: number;
     checkedAt?: Date;
   }) {
+    if (!Number.isInteger(retryMs) || retryMs <= 0) {
+      throw new DomainError('Retry interval must be a positive integer.');
+    }
+
     return this.trackingRepository.markFailedCheck(trackingId, {
       lastCheckedAt: checkedAt,
-      nextCheckAt: checkedAt,
+      nextCheckAt: new Date(checkedAt.getTime() + retryMs),
       errorMessage: this.getErrorMessage(error),
     });
   }
 
   parseIntervalHours(intervalHours: number): TrackingIntervalHours {
     if (!intervalSet.has(intervalHours)) {
-      throw new DomainError('Интервал должен быть одним из: 1, 3, 6, 12, 24.');
+      throw new DomainError(
+        'Интервал должен быть одним из: 1, 3, 6, 12, 24 часа.',
+      );
     }
 
     return intervalHours as TrackingIntervalHours;
-  }
-
-  private addHours(date: Date, hours: TrackingIntervalHours): Date {
-    return new Date(date.getTime() + hours * 60 * 60 * 1000);
   }
 
   private getErrorMessage(error: unknown): string {
