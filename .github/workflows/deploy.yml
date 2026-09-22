@@ -40,6 +40,8 @@ jobs:
     needs: verify-main
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      DATABASE_URL: file:./ci.db
     permissions:
       contents: read
     steps:

@@ -13,6 +13,8 @@ jobs:
   checks:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      DATABASE_URL: file:./ci.db
 
     steps:
       - name: Check out repository
