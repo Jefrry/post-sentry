@@ -2,7 +2,7 @@ name: post-sentry
 
 services:
   app:
-    image: post-sentry:local
+    image: ${IMAGE_REF:-post-sentry:local}
     build:
       context: .
       target: production

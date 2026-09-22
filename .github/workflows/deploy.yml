@@ -1,0 +1,185 @@
+name: Deploy production
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
+
+jobs:
+  verify-main:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+    outputs:
+      release_sha: ${{ steps.release.outputs.sha }}
+    steps:
+      - name: Require the main branch
+        env:
+          DISPATCHED_REF: ${{ github.ref }}
+        run: |
+          if [ "$DISPATCHED_REF" != 'refs/heads/main' ]; then
+            echo 'Production deployments must be started from the main branch.' >&2
+            exit 1
+          fi
+
+      - name: Check out main
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: main
+
+      - name: Resolve release commit
+        id: release
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  checks:
+    needs: verify-main
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Check out main
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.verify-main.outputs.release_sha }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 10.28.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run release checks
+        run: |
+          pnpm format:check
+          pnpm lint
+          pnpm test
+          pnpm build
+          pnpm exec prisma validate
+          cp .env.example .env
+          IMAGE_REF=ghcr.io/example/post-sentry:ci \
+            docker compose config --quiet
+
+  build:
+    needs: [verify-main, checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+      image: ${{ steps.image.outputs.name }}
+      release_sha: ${{ needs.verify-main.outputs.release_sha }}
+    steps:
+      - name: Check out main
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.verify-main.outputs.release_sha }}
+
+      - name: Resolve image and release names
+        id: image
+        env:
+          REPOSITORY: ${{ github.repository }}
+        run: echo "name=ghcr.io/${REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish image
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          target: production
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.image.outputs.name }}:${{ needs.verify-main.outputs.release_sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    permissions:
+      contents: read
+      packages: read
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_KEY }}
+      SSH_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+      GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GHCR_USER: ${{ github.actor }}
+      IMAGE_REF: ${{ needs.build.outputs.image }}@${{ needs.build.outputs.digest }}
+      RELEASE_SHA: ${{ needs.build.outputs.release_sha }}
+    steps:
+      - name: Check out deployment files
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.build.outputs.release_sha }}
+
+      - name: Configure SSH
+        run: |
+          set -eu
+          case "$VPS_PORT" in
+            ''|*[!0-9]*) echo 'VPS_PORT must be a number.' >&2; exit 1 ;;
+          esac
+          case "$VPS_USER" in
+            ''|*[!A-Za-z0-9._-]*) echo 'VPS_USER contains unsupported characters.' >&2; exit 1 ;;
+          esac
+          case "$VPS_HOST" in
+            ''|*[!A-Za-z0-9.-]*) echo 'VPS_HOST contains unsupported characters.' >&2; exit 1 ;;
+          esac
+          install -d -m 700 "$RUNNER_TEMP/ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$RUNNER_TEMP/ssh/key"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/ssh/known_hosts"
+          chmod 600 "$RUNNER_TEMP/ssh/key" "$RUNNER_TEMP/ssh/known_hosts"
+
+      - name: Upload deployment files
+        run: |
+          set -eu
+          SSH_ARGS=(-i "$RUNNER_TEMP/ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$RUNNER_TEMP/ssh/known_hosts" -p "$VPS_PORT")
+          SCP_ARGS=(-i "$RUNNER_TEMP/ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$RUNNER_TEMP/ssh/known_hosts" -P "$VPS_PORT")
+          ssh "${SSH_ARGS[@]}" "$VPS_USER@$VPS_HOST" 'mkdir -p apps/post-sentry'
+          scp "${SCP_ARGS[@]}" compose.yaml "$VPS_USER@$VPS_HOST:apps/post-sentry/compose.yaml.next"
+          scp "${SCP_ARGS[@]}" deploy/deploy.sh "$VPS_USER@$VPS_HOST:apps/post-sentry/deploy.sh.next"
+
+      - name: Deploy exact image digest
+        run: |
+          set -eu
+          SSH_ARGS=(-i "$RUNNER_TEMP/ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$RUNNER_TEMP/ssh/known_hosts" -p "$VPS_PORT")
+
+          printf '%s' "$GHCR_TOKEN" | \
+            ssh "${SSH_ARGS[@]}" "$VPS_USER@$VPS_HOST" \
+              "docker login ghcr.io --username '$GHCR_USER' --password-stdin"
+
+          set +e
+          ssh "${SSH_ARGS[@]}" "$VPS_USER@$VPS_HOST" \
+            "cd apps/post-sentry && chmod 700 deploy.sh.next && IMAGE_REF='$IMAGE_REF' RELEASE_SHA='$RELEASE_SHA' ./deploy.sh.next"
+          deploy_status=$?
+          ssh "${SSH_ARGS[@]}" "$VPS_USER@$VPS_HOST" 'docker logout ghcr.io >/dev/null 2>&1 || true'
+          exit "$deploy_status"
