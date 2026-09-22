@@ -9,7 +9,7 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: file:/app/data/app.db
+      DATABASE_URL: "file:/app/data/app.db"
       NODE_ENV: production
       NODE_OPTIONS: --max-old-space-size=320
     volumes:
