@@ -2,11 +2,14 @@ import { Telegraf, type Context } from 'telegraf';
 
 import { DomainError } from '../../modules/common/domainError.js';
 import type { TrackingDto } from '../../modules/tracking/tracking.types.js';
+import { escapeHtml } from '../../utils/escapeHtml.js';
+import { formatUtcDateTime } from '../../utils/formatUtcDateTime.js';
 import {
   emptyTrackingListKeyboard,
   trackingDeleteConfirmationKeyboard,
   trackingListKeyboard,
 } from '../keyboards/trackingList.keyboard.js';
+import { trackingListCommand } from '../menuCommands.js';
 import { isMessageNotModifiedError } from '../telegramError.js';
 import type { BotHandlerDeps } from './types.js';
 
@@ -22,6 +25,10 @@ export class TrackingListHandler {
   ) {}
 
   register(): void {
+    this.bot.command(trackingListCommand, async (ctx) => {
+      await this.showCurrentUserList(ctx, 0);
+    });
+
     this.bot.action('tracking:list', async (ctx) => {
       await ctx.answerCbQuery();
       await this.showCurrentUserList(ctx, 0);
@@ -197,8 +204,15 @@ export class TrackingListHandler {
             totalPages,
           );
 
+    const options = { ...keyboard, parse_mode: 'HTML' as const };
+
+    if (!ctx.callbackQuery) {
+      await ctx.reply(text, options);
+      return;
+    }
+
     try {
-      await ctx.editMessageText(text, keyboard);
+      await ctx.editMessageText(text, options);
     } catch (error) {
       if (!isMessageNotModifiedError(error)) {
         throw error;
@@ -238,7 +252,7 @@ export class TrackingListHandler {
     totalPages: number,
     notice?: string,
   ): string {
-    const parts = notice ? [notice, ''] : [];
+    const parts = notice ? [escapeHtml(notice), ''] : [];
 
     if (trackings.length === 0) {
       parts.push(
@@ -259,13 +273,15 @@ export class TrackingListHandler {
       );
       const status =
         tracking.isActive && !tracking.lastError ? '✅ active' : '❌ error';
+      const date = tracking.nextCheckAt;
+      const unixTime = Math.floor(date.getTime() / 1_000);
 
       parts.push(
-        `${page * pageSize + index + 1}. ${this.formatChannel(tracking)}`,
-        `Ключевые слова: ${keywords}`,
+        `${page * pageSize + index + 1}. ${escapeHtml(this.formatChannel(tracking))}`,
+        `Ключевые слова: ${escapeHtml(keywords)}`,
         `Интервал: ${tracking.intervalHours} ч`,
         `Статус: ${status}`,
-        `Следующая проверка: ${tracking.nextCheckAt.toISOString()}`,
+        `Следующая проверка: <tg-time unix="${unixTime}" format="dt">${formatUtcDateTime(date)} UTC</tg-time>`,
         '',
       );
     }

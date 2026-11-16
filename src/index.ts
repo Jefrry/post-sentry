@@ -1,4 +1,5 @@
 import { createBot } from './bot/bot.js';
+import { configureCommandMenu } from './bot/menuCommands.js';
 import { env } from './config/env.js';
 import { disconnectDatabase } from './db/prisma.js';
 import { ChannelReaderService } from './modules/channels/channelReader.service.js';
@@ -50,6 +51,8 @@ async function startBot(): Promise<void> {
   await telegramClientService.connect();
   await telegramClientService.checkAuthorization();
   logger.info('Telegram MTProto client connected');
+
+  await configureCommandMenu(bot.telegram);
 
   const botReady = new Promise<void>((resolve, reject) => {
     botRunPromise = bot.launch(() => {

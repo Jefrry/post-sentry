@@ -1,6 +1,6 @@
 import { Telegraf, type Context } from 'telegraf';
 
-import { AWAITING_INTERVAL } from '../../constants.js';
+import { AWAITING_INTERVAL, AWAITING_KEYWORDS } from '../../constants.js';
 import { DomainError } from '../../modules/common/domainError.js';
 import { TrackingAlreadyExistsError } from '../../modules/tracking/tracking.errors.js';
 import type { TrackingDto } from '../../modules/tracking/tracking.types.js';
@@ -9,6 +9,7 @@ import {
   trackingCancelKeyboard,
   trackingIntervalKeyboard,
 } from '../keyboards/tracking.keyboard.js';
+import { trackingAddCommand } from '../menuCommands.js';
 import type { BotHandlerDeps } from './types.js';
 
 export class TrackingHandler {
@@ -18,31 +19,13 @@ export class TrackingHandler {
   ) {}
 
   register(): void {
+    this.bot.command(trackingAddCommand, async (ctx) => {
+      await this.openAddPrompt(ctx);
+    });
+
     this.bot.action('tracking:add', async (ctx) => {
       await ctx.answerCbQuery();
-
-      const telegramUser = await this.getPrivateUser(ctx);
-
-      if (!telegramUser) {
-        return;
-      }
-
-      try {
-        await this.deps.userService.registerTelegramUser(telegramUser);
-        this.deps.userStateManager.setAwaitingChannelLink(telegramUser.id);
-
-        await ctx.editMessageText(
-          'Отправь публичную ссылку на Telegram-канал или его @username.',
-          trackingCancelKeyboard,
-        );
-      } catch (error) {
-        await ctx.reply(
-          this.getErrorMessage(
-            error,
-            'Не удалось начать добавление отслеживания. Попробуй ещё раз.',
-          ),
-        );
-      }
+      await this.openAddPrompt(ctx);
     });
 
     this.bot.action('tracking:cancel', async (ctx) => {
@@ -144,6 +127,46 @@ export class TrackingHandler {
         await ctx.reply(text, mainKeyboard);
       }
     });
+  }
+
+  private async openAddPrompt(ctx: Context): Promise<void> {
+    const telegramUser = await this.getPrivateUser(ctx);
+
+    if (!telegramUser) {
+      return;
+    }
+
+    try {
+      await this.deps.userService.registerTelegramUser(telegramUser);
+      const state = this.deps.userStateManager.get(telegramUser.id);
+
+      if (!state) {
+        this.deps.userStateManager.setAwaitingChannelLink(telegramUser.id);
+      }
+
+      let text = 'Отправь публичную ссылку на Telegram-канал или его @username.';
+      let keyboard = trackingCancelKeyboard;
+
+      if (state?.type === AWAITING_KEYWORDS) {
+        text = `Канал «${state.channel.title}» найден. Отправь ключевые слова через запятую.`;
+      } else if (state?.type === AWAITING_INTERVAL) {
+        text = 'Выбери интервал проверки канала:';
+        keyboard = trackingIntervalKeyboard;
+      }
+
+      if (ctx.callbackQuery) {
+        await ctx.editMessageText(text, keyboard);
+      } else {
+        await ctx.reply(text, keyboard);
+      }
+    } catch (error) {
+      await ctx.reply(
+        this.getErrorMessage(
+          error,
+          'Не удалось открыть добавление отслеживания. Попробуй ещё раз.',
+        ),
+      );
+    }
   }
 
   private async getPrivateUser(
