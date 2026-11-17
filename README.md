@@ -1,40 +1,40 @@
 # Post Sentry
 
-Post Sentry — Telegram-бот для мониторинга новых публикаций в публичных Telegram-каналах. Пользователь добавляет канал, задаёт ключевые слова и интервал 1/3/6/12/24 часа. Бот пересылает совпавшие публикации, а если Telegram запрещает forwarding, отправляет уведомление со ссылкой.
+Post Sentry is a Telegram bot that monitors public Telegram channels for new posts. Users add a channel, specify keywords, and choose a check interval of 1, 3, 6, 12, or 24 hours. The bot forwards matching posts. If Telegram blocks forwarding, the bot sends a notification with a link to the post.
 
-MVP поддерживает только публичные broadcast-каналы с `@username`. Приватные каналы, invite links, группы и обсуждения не поддерживаются.
+The MVP supports public broadcast channels with an `@username`. Private channels, invite links, groups, and discussions are unsupported.
 
-## Как устроен бот
+## How the bot works
 
-Для продукта нужны два независимых Telegram API:
+The bot uses two independent Telegram APIs.
 
-- Telegraf 4 работает через Bot API: принимает `/start`, inline callbacks и сообщения диалога, отправляет уведомления и пытается переслать найденные посты.
-- GramJS работает через MTProto от одной серверной user session: разрешает произвольные публичные каналы и читает их историю. Bot API сам по себе не даёт надёжно читать историю любого публичного канала.
+- Telegraf 4 uses the Bot API to handle `/start`, inline button callbacks, and messages in the bot conversation. It sends notifications and attempts to forward matching posts.
+- GramJS uses MTProto with a single server-side user session to resolve public channels by username and read their history. The Bot API alone cannot reliably read the history of arbitrary public channels.
 
-Постоянные данные хранятся в SQLite через Prisma. Диалоговый state находится в памяти `UserStateManager` и после перезапуска сбрасывается. `lastSeenMessageId` хранится в БД: при создании отслеживания курсор ставится на текущий последний пост, поэтому история не рассылается; после простоя сервис дочитывает все сообщения новее курсора. Таблица `Delivery` защищает от повторной доставки уже обработанного совпадения.
+Prisma stores persistent data in SQLite. `UserStateManager` keeps conversation state in memory, so it resets when the bot restarts. The database stores `lastSeenMessageId`. When a user starts monitoring a channel, the bot sets the cursor to the latest post, so alerts start with new posts. After downtime, the bot catches up on all messages newer than the cursor. The `Delivery` table prevents duplicate delivery of matches the bot has already processed.
 
-Процесс должен быть только один. SQLite, in-memory state и локальный scheduler этого MVP не рассчитаны на несколько одновременных экземпляров.
+Run a single instance of the bot. The MVP uses SQLite, in-memory conversation state, and a local scheduler designed for one running process.
 
-## Требования
+## Requirements
 
-- Node.js 24 LTS;
-- pnpm 10.28.2 через Corepack;
-- Telegram-аккаунт для единственной MTProto user session;
-- Docker Engine с Docker Compose v2 — только для контейнерного запуска.
+- Node.js 24 LTS
+- pnpm 10.28.2 via Corepack
+- A Telegram account for the single MTProto user session
+- Docker Engine with Docker Compose v2 for containerized deployments
 
-## Подготовка Telegram
+## Telegram setup
 
 ### Bot API
 
-1. Откройте [@BotFather](https://t.me/BotFather).
-2. Выполните `/newbot`, задайте имя и username.
-3. Сохраните выданный token в `BOT_TOKEN` файла `.env`. Не публикуйте token и не добавляйте `.env` в Git.
+1. Open [@BotFather](https://t.me/BotFather).
+2. Run `/newbot` and choose a name and username.
+3. Save the token from BotFather as `BOT_TOKEN` in `.env`. Keep the token private and leave `.env` out of Git.
 
-### MTProto api_id, api_hash и session
+### MTProto API credentials and session
 
-1. Войдите на [my.telegram.org](https://my.telegram.org/), откройте **API development tools** и создайте приложение.
-2. Сохраните `api_id` и `api_hash` как `TELEGRAM_API_ID` и `TELEGRAM_API_HASH` в локальном `.env`.
-3. Установите зависимости и запустите QR-авторизацию:
+1. Sign in to [my.telegram.org](https://my.telegram.org/), open **API development tools**, and create an application.
+2. Save `api_id` and `api_hash` as `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` in your local `.env`.
+3. Install the dependencies and start QR code authentication.
 
    ```bash
    corepack enable
@@ -42,20 +42,20 @@ MVP поддерживает только публичные broadcast-кана�
    pnpm telegram:auth
    ```
 
-4. В мобильном Telegram откройте **Settings → Devices → Link Desktop Device**, отсканируйте QR и подтвердите вход. При включённой 2FA скрипт запросит пароль.
-5. Скопируйте напечатанную `StringSession` в `TELEGRAM_SESSION` файла `.env`. Эта строка предоставляет доступ к Telegram-аккаунту: храните её как пароль, не отправляйте в чат, issue или логи. Если терминал общий, очистите его scrollback после сохранения.
+4. In the Telegram mobile app, open **Settings → Devices → Link Desktop Device**, scan the QR code, and confirm the sign-in. If two-factor authentication is enabled, the script prompts you for your password.
+5. Copy the printed `StringSession` into `TELEGRAM_SESSION` in `.env`. The session string grants access to the Telegram account. Treat it like a password and keep it out of chats, issues, and logs. If you use a shared terminal, clear its scrollback after saving the string.
 
-Используйте отдельный Telegram-аккаунт с минимально необходимым доступом. Соблюдайте Telegram API Terms, не обходите rate limits и учитывайте `FLOOD_WAIT`.
+Use a dedicated Telegram account with the minimum access needed. Follow the Telegram API Terms, respect rate limits, and observe the wait times indicated by `FLOOD_WAIT`.
 
-## Настройка `.env`
+## Configure `.env`
 
-Создайте локальный файл из безопасного шаблона:
+Create a local configuration file from the example.
 
 ```bash
 cp .env.example .env
 ```
 
-Заполните все поля:
+Fill in all fields.
 
 ```dotenv
 BOT_TOKEN=
@@ -67,11 +67,11 @@ SCHEDULER_POLL_MS=30000
 CHECK_RETRY_MS=300000
 ```
 
-`SCHEDULER_POLL_MS` — частота поиска наступивших проверок. `CHECK_RETRY_MS` — задержка повтора после ошибки одного отслеживания. Даты сохраняются как UTC и в интерфейсе выводятся в ISO 8601.
+`SCHEDULER_POLL_MS` controls how often the scheduler looks for checks that are due. `CHECK_RETRY_MS` sets the retry delay when a check fails. The bot stores timestamps in UTC and displays them in ISO 8601 format.
 
-## Первый локальный запуск
+## Run locally for the first time
 
-После заполнения `.env` выполните:
+After filling in `.env`, run the following commands.
 
 ```bash
 corepack enable
@@ -81,9 +81,9 @@ pnpm exec prisma migrate deploy
 pnpm dev
 ```
 
-Команда `migrate deploy` применяет уже существующие миграции без создания новой. Для разработки новой схемы доступна `pnpm prisma:migrate`, которая запускает `prisma migrate dev` и не должна использоваться в production.
+`migrate deploy` applies pending migrations. To create a migration while developing schema changes, use `pnpm prisma:migrate`, which runs `prisma migrate dev` and is intended for development only.
 
-Обычные команды:
+Common commands:
 
 ```bash
 pnpm dev
@@ -97,7 +97,7 @@ pnpm prisma:generate
 pnpm prisma:studio
 ```
 
-Для production-подобного локального запуска:
+To run the production build locally, use the following commands.
 
 ```bash
 pnpm build
@@ -105,36 +105,36 @@ pnpm exec prisma migrate deploy
 pnpm start
 ```
 
-Не запускайте `pnpm start` одновременно с `pnpm dev` или контейнером на той же БД и с тем же bot token.
+Before running `pnpm start`, stop any running `pnpm dev` process or container that shares the database and bot token.
 
 ## Docker Compose
 
-Образ использует multi-stage build на `node:24-bookworm-slim`. Сначала pnpm устанавливает зависимости строго по lockfile, затем отдельно выполняются `prisma generate` и TypeScript build, после чего dev-зависимости удаляются. В runtime оставлены только production dependencies, `dist`, Prisma schema/migrations и entrypoint.
+The image uses a multi-stage build based on `node:24-bookworm-slim`. pnpm installs dependencies from the lockfile, then separate steps run `prisma generate` and compile TypeScript. The build then removes development dependencies. The runtime image contains the production dependencies, `dist`, the Prisma schema and migrations, and the entrypoint.
 
-Пакет `prisma` намеренно находится в production dependencies: entrypoint выполняет `prisma migrate deploy` перед каждым запуском приложения. Это не `migrate dev`; уже применённые миграции пропускаются. Debian-образ также устанавливает OpenSSL, требуемый Prisma engine.
+`prisma` is a production dependency because the entrypoint runs `prisma migrate deploy` each time the application starts. This command skips migrations that have already been applied. The Debian-based image also installs OpenSSL, which the Prisma engine requires.
 
-Первый запуск с новым named volume:
+To start the bot with a new named volume, run the following commands.
 
 ```bash
 docker compose up -d --build
 docker compose logs -f --tail=100 app
 ```
 
-Entrypoint создаст `/app/data/app.db` и применит миграции, затем через `exec` запустит Node.js. Порты не публикуются: long polling Bot API и MTProto используют только исходящие соединения.
+The entrypoint creates `/app/data/app.db`, applies migrations, and starts Node.js with `exec`. Both Bot API long polling and MTProto use outbound connections, so the container publishes no ports.
 
-Корректная остановка с сохранением volume:
+To stop the bot gracefully while keeping the volume, run:
 
 ```bash
 docker compose stop
 ```
 
-Удаление контейнера и сети также сохраняет named volume:
+To remove the container and network while keeping the named volume, run:
 
 ```bash
 docker compose down
 ```
 
-Не добавляйте `-v`, если не хотите безвозвратно удалить БД. Обновление после получения новой версии:
+Adding `-v` permanently deletes the database. After pulling a new version, update the deployment with the following commands.
 
 ```bash
 docker compose down
@@ -142,83 +142,21 @@ docker compose up -d --build
 docker compose logs -f --tail=100 app
 ```
 
-В приложении нет HTTP endpoint, поэтому фиктивный healthcheck по наличию процесса не добавлен. Работоспособность определяется корректным exit code; `restart: unless-stopped` перезапускает аварийно завершившийся процесс. Смотрите причины в `docker compose logs`.
+The application has no HTTP endpoint or process-only health check. The process signals failure through its exit code, and `restart: unless-stopped` restarts it after a crash. To investigate a failure, run `docker compose logs`.
 
-### Resource и security limits
+## SQLite and backups
 
-Compose запускает один непривилегированный процесс с такими параметрами:
+With the example configuration, the local database is `prisma/dev.db`. The container stores its database at `/app/data/app.db` in the `post-sentry-data` named volume. The physical path depends on the Docker runtime. Run `docker volume inspect post-sentry-data` to view the volume metadata. Leave the Docker-managed `_data` directory untouched.
 
-- `cpus: "0.50"`;
-- hard memory limit `512m`, reservation `128m`;
-- `pids_limit: 128`;
-- V8 heap `--max-old-space-size=320`, оставляя память Prisma, GramJS и нативным библиотекам;
-- read-only root filesystem и отдельный named volume только для `/app/data`;
-- `tmpfs /tmp` не больше `64m`;
-- `user: 1000:1000`, `cap_drop: [ALL]`, `no-new-privileges:true`;
-- `init: true`, `restart: unless-stopped`, `stop_grace_period: 30s`.
-
-Проверить применённые ограничения можно так:
-
-```bash
-docker inspect "$(docker compose ps -q app)" --format 'NanoCpus={{.HostConfig.NanoCpus}} Memory={{.HostConfig.Memory}} MemoryReservation={{.HostConfig.MemoryReservation}} PidsLimit={{.HostConfig.PidsLimit}} ReadonlyRootfs={{.HostConfig.ReadonlyRootfs}} CapDrop={{json .HostConfig.CapDrop}}'
-```
-
-При нехватке памяти процесс завершится, а restart policy запустит его снова. Признаки — повторяющийся startup в логах, рост restart count и `OOMKilled=true`:
-
-```bash
-docker inspect "$(docker compose ps -q app)" --format 'OOMKilled={{.State.OOMKilled}} RestartCount={{.RestartCount}}'
-docker compose logs --tail=200 app
-```
-
-Меняйте `mem_limit`, `mem_reservation` и `NODE_OPTIONS` согласованно; V8 heap должен оставаться заметно ниже hard limit. CPU изменяется полем `cpus` в `compose.yaml`.
-
-### Эквивалентный безопасный `docker run`
-
-Сначала соберите образ и создайте volume:
-
-```bash
-docker build --target production -t post-sentry:local .
-docker volume create post-sentry-data
-```
-
-Запуск без секретов в командной строке:
-
-```bash
-docker run -d \
-  --name post-sentry \
-  --env-file .env \
-  --env DATABASE_URL=file:/app/data/app.db \
-  --env NODE_ENV=production \
-  --env NODE_OPTIONS=--max-old-space-size=320 \
-  --mount type=volume,src=post-sentry-data,dst=/app/data \
-  --user 1000:1000 \
-  --cpus=0.5 \
-  --memory=512m \
-  --memory-reservation=128m \
-  --pids-limit=128 \
-  --read-only \
-  --tmpfs /tmp:size=64m,mode=1777 \
-  --cap-drop=ALL \
-  --security-opt=no-new-privileges \
-  --init \
-  --restart=unless-stopped \
-  --stop-timeout=30 \
-  post-sentry:local
-```
-
-## SQLite и резервные копии
-
-Локальная БД из шаблона находится в `prisma/dev.db`. Контейнерная БД — `/app/data/app.db` в named volume `post-sentry-data`. Физический путь зависит от Docker runtime; посмотреть метаданные можно командой `docker volume inspect post-sentry-data`. Не редактируйте Docker-managed `_data` вручную.
-
-Для консистентной простой копии остановите единственный writer. Локально:
+Stop the process that writes to the database before copying it to get a consistent backup. For a local backup, run the following commands.
 
 ```bash
 mkdir -p backups
-# Остановите dev/start процесс, затем:
+# Stop the dev or start process, then run:
 cp prisma/dev.db backups/app.db
 ```
 
-Для Docker:
+For a Docker backup, run the following commands.
 
 ```bash
 mkdir -p backups
@@ -230,50 +168,4 @@ docker run --rm \
 docker compose start app
 ```
 
-Храните резервные копии вне named volume. Перед восстановлением остановите приложение и сохраните отдельную копию текущей БД.
-
-## Ограничения MVP
-
-- Только публичные broadcast-каналы с username.
-- Одна MTProto user session и ровно один процесс приложения.
-- Диалог добавления хранится в памяти и после рестарта начинается заново.
-- При protected content Bot API может запретить forward; бот отправит текст со ссылкой. Если пользователь заблокировал бота, даже fallback доставить невозможно, ошибка изолируется одним отслеживанием и будет повторена позже.
-- SQLite подходит для одного небольшого MVP-процесса, но не для горизонтального масштабирования.
-- Между успешной отправкой уведомления и записью `Delivery` остаётся небольшой crash window: при аварийном завершении в этот момент Telegram может получить повтор после рестарта. В штатной работе уникальная запись доставки и курсор предотвращают дубли.
-- GramJS-пакет `telegram` зафиксирован требованиями проекта; следите за его security/maintenance status перед production-эксплуатацией.
-
-## Ручной smoke checklist
-
-Перед smoke-тестом используйте специально предоставленные тестовые credentials и тестовый Telegram-аккаунт. Не запускайте реального бота в CI без секретов.
-
-- [ ] `/start` открывает главное inline-меню в private chat.
-- [ ] Невалидная ссылка получает понятную ошибку и не меняет persistent data.
-- [ ] Недоступный/private channel отклоняется.
-- [ ] Пустые, слишком длинные и избыточные keywords отклоняются; дубли после нормализации сохраняются один раз.
-- [ ] Каждый интервал 1/3/6/12/24 часа создаётся и отображается корректно; другой interval callback отклоняется.
-- [ ] Повторное отслеживание того же канала одним пользователем не создаётся.
-- [ ] Список, несколько страниц, подтверждение/отмена удаления и возврат на валидную страницу работают.
-- [ ] Удалить можно только собственную запись; stale/чужой callback сообщает, что запись уже удалена или недоступна.
-- [ ] Совпадение находится без учёта регистра и в обычном text.
-- [ ] Совпадение находится в caption медиа-поста.
-- [ ] Перезапуск между проверками дочитывает все сообщения после `lastSeenMessageId` без пропуска.
-- [ ] Protected content приводит к fallback-уведомлению со ссылкой.
-- [ ] Если пользователь заблокировал бота, ошибка одного tracking не останавливает последующие tracking.
-- [ ] Первый контейнерный запуск с пустым volume применяет миграции и создаёт БД.
-- [ ] Повторный контейнерный запуск сохраняет users/trackings/deliveries в named volume.
-- [ ] `docker compose stop` завершает scheduler, Telegraf, GramJS и Prisma в пределах grace period; последующий `prisma migrate deploy` и запуск подтверждают целостность БД.
-
-## Проверки перед релизом
-
-```bash
-pnpm format:check
-pnpm lint
-pnpm test
-pnpm build
-pnpm exec prisma validate
-pnpm exec prisma generate
-docker compose config --no-env-resolution --quiet
-docker build --target production -t post-sentry:local .
-```
-
-Последняя Compose-команда намеренно использует `--no-env-resolution --quiet`: она проверяет модель без раскрытия значений из `.env`.
+Keep backups outside the named volume. Before restoring a backup, stop the application and save a separate copy of the current database.
