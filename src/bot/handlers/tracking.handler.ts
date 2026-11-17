@@ -147,7 +147,8 @@ export class TrackingHandler {
         this.deps.userStateManager.setAwaitingChannelLink(telegramUser.id);
       }
 
-      let text = 'Отправь публичную ссылку на Telegram-канал или его @username.';
+      let text =
+        'Отправь публичную ссылку на Telegram-канал или его @username.';
       let keyboard = trackingCancelKeyboard;
 
       if (state?.type === AWAITING_KEYWORDS) {
