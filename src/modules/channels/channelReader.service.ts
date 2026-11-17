@@ -1,5 +1,7 @@
 import { Api, errors, type TelegramClient } from 'telegram';
 
+import { logger } from '../../utils/logger.js';
+import { describeTelegramError } from '../telegram/telegramErrorDetails.js';
 import { ChannelReaderError } from './channelReader.errors.js';
 import type { ChannelDto, ChannelPostDto } from './channel.types.js';
 
@@ -20,9 +22,14 @@ export class ChannelReaderService {
 
   async resolvePublicChannel(username: string): Promise<ChannelDto> {
     const normalizedUsername = this.normalizeUsername(username);
+    const peer = `@${normalizedUsername}`;
+    let operation: 'getEntity' | 'getMessages' = 'getEntity';
 
     try {
-      const entity = await this.client.getEntity(`@${normalizedUsername}`);
+      logger.info(
+        `Telegram channel lookup: channel=${peer} operation=${operation}`,
+      );
+      const entity = await this.client.getEntity(peer);
       const channel = this.toPublicBroadcastChannel(entity);
       const channelUsername = this.getPublicUsername(
         channel,
@@ -36,8 +43,13 @@ export class ChannelReaderService {
         );
       }
 
+      operation = 'getMessages';
+      logger.info(
+        `Telegram channel lookup: channel=${peer} operation=${operation}`,
+      );
       const currentLastMessageId =
         await this.getCurrentLastMessageId(normalizedUsername);
+      logger.info(`Telegram channel lookup succeeded: channel=${peer}`);
 
       return {
         channelId: this.toStableChannelId(channel.id),
@@ -46,6 +58,9 @@ export class ChannelReaderService {
         currentLastMessageId,
       };
     } catch (error) {
+      logger.error(
+        `Telegram channel lookup failed: channel=${peer} operation=${operation} ${describeTelegramError(error)}`,
+      );
       throw this.toDomainError(error);
     }
   }

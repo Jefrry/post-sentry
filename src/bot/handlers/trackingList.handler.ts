@@ -3,7 +3,7 @@ import { Telegraf, type Context } from 'telegraf';
 import { DomainError } from '../../modules/common/domainError.js';
 import type { TrackingDto } from '../../modules/tracking/tracking.types.js';
 import { escapeHtml } from '../../utils/escapeHtml.js';
-import { formatUtcDateTime } from '../../utils/formatUtcDateTime.js';
+import { formatTelegramDateTime } from '../../utils/formatTelegramDateTime.js';
 import {
   emptyTrackingListKeyboard,
   trackingDeleteConfirmationKeyboard,
@@ -273,15 +273,13 @@ export class TrackingListHandler {
       );
       const status =
         tracking.isActive && !tracking.lastError ? '✅ active' : '❌ error';
-      const date = tracking.nextCheckAt;
-      const unixTime = Math.floor(date.getTime() / 1_000);
 
       parts.push(
         `${page * pageSize + index + 1}. ${escapeHtml(this.formatChannel(tracking))}`,
         `Ключевые слова: ${escapeHtml(keywords)}`,
         `Интервал: ${tracking.intervalHours} ч`,
         `Статус: ${status}`,
-        `Следующая проверка: <tg-time unix="${unixTime}" format="dt">${formatUtcDateTime(date)} UTC</tg-time>`,
+        `Следующая проверка: ${formatTelegramDateTime(tracking.nextCheckAt)}`,
         '',
       );
     }

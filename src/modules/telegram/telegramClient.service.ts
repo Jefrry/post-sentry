@@ -1,6 +1,7 @@
-import { sessions, TelegramClient } from 'telegram';
+import { Api, sessions, TelegramClient } from 'telegram';
 
 import { env } from '../../config/env.js';
+import { describeTelegramError } from './telegramErrorDetails.js';
 
 const connectionRetries = 5;
 const { StringSession } = sessions;
@@ -43,27 +44,20 @@ export class TelegramClientService {
 
     try {
       await this.client.connect();
-    } catch {
+    } catch (error) {
       throw new TelegramStartupError(
-        'Failed to connect Telegram MTProto client. Check TELEGRAM_API_ID, TELEGRAM_API_HASH and network access.',
+        `Telegram MTProto startup failed: operation=connect ${describeTelegramError(error)}`,
       );
     }
   }
 
   async checkAuthorization(): Promise<void> {
-    let isAuthorized: boolean;
-
     try {
-      isAuthorized = await this.client.checkAuthorization();
-    } catch {
+      // GramJS checkAuthorization() suppresses errors from this request.
+      await this.client.invoke(new Api.updates.GetState());
+    } catch (error) {
       throw new TelegramStartupError(
-        'Failed to verify Telegram MTProto authorization. Recreate TELEGRAM_SESSION with pnpm telegram:auth.',
-      );
-    }
-
-    if (!isAuthorized) {
-      throw new TelegramStartupError(
-        'Telegram MTProto session is not authorized or has expired. Recreate TELEGRAM_SESSION with pnpm telegram:auth.',
+        `Telegram MTProto startup failed: operation=updates.GetState ${describeTelegramError(error)}`,
       );
     }
   }

@@ -4,6 +4,8 @@ import { AWAITING_INTERVAL, AWAITING_KEYWORDS } from '../../constants.js';
 import { DomainError } from '../../modules/common/domainError.js';
 import { TrackingAlreadyExistsError } from '../../modules/tracking/tracking.errors.js';
 import type { TrackingDto } from '../../modules/tracking/tracking.types.js';
+import { escapeHtml } from '../../utils/escapeHtml.js';
+import { formatTelegramDateTime } from '../../utils/formatTelegramDateTime.js';
 import { mainKeyboard } from '../keyboards/main.keyboard.js';
 import {
   trackingCancelKeyboard,
@@ -120,11 +122,12 @@ export class TrackingHandler {
 
       this.deps.userStateManager.clear(telegramUser.id);
       const text = this.formatCreatedTracking(tracking);
+      const options = { ...mainKeyboard, parse_mode: 'HTML' as const };
 
       try {
-        await ctx.editMessageText(text, mainKeyboard);
+        await ctx.editMessageText(text, options);
       } catch {
-        await ctx.reply(text, mainKeyboard);
+        await ctx.reply(text, options);
       }
     });
   }
@@ -197,10 +200,10 @@ export class TrackingHandler {
 
     return [
       'Отслеживание создано.',
-      `Канал: ${channel}`,
-      `Ключевые слова: ${keywords}`,
+      `Канал: ${escapeHtml(channel)}`,
+      `Ключевые слова: ${escapeHtml(keywords)}`,
       `Интервал: ${tracking.intervalHours} ч`,
-      `Первая проверка: ${tracking.nextCheckAt.toISOString()}`,
+      `Первая проверка: ${formatTelegramDateTime(tracking.nextCheckAt)}`,
     ].join('\n');
   }
 
